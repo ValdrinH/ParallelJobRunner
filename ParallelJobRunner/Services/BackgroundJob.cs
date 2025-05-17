@@ -32,7 +32,7 @@ namespace ParallelJobRunner.Services
         private string _status = "Pending";
 
         /// <summary>
-        /// Gets or sets the current status of the job (e.g., Pending, Running, Completed, Cancelled, Error).
+        /// Gets or sets the current status of the job (e.g., Pending, Running, Paused, Completed, Cancelled, Error).
         /// </summary>
         public string Status
         {
@@ -79,6 +79,8 @@ namespace ParallelJobRunner.Services
 
         private readonly CancellationTokenSource _cts = new();
         private readonly IJobLogger _logger;
+        private volatile bool _isPaused;
+        private TaskCompletionSource<bool>? _resumeTcs;
 
         /// <summary>
         /// Occurs when a property value changes.
@@ -118,6 +120,7 @@ namespace ParallelJobRunner.Services
                 Status = "Running";
                 StartTime = DateTime.Now;
 
+                // Execute and await the job action
                 Result = await JobAction(_cts.Token);
 
                 EndTime = DateTime.Now;
@@ -138,15 +141,77 @@ namespace ParallelJobRunner.Services
                 _logger.Log(JobId.ToString(), $"[ERROR] Job '{Name}' failed: {ex.Message}");
                 OnError?.Invoke(ex);
             }
+            finally
+            {
+                _cts.Dispose();
+            }
         }
 
         /// <summary>
-        /// Cancels the job if it is running.
+        /// Cancels the job if it is running or paused.
         /// </summary>
         public void Cancel()
         {
             _cts.Cancel();
+            if (_isPaused)
+            {
+                _resumeTcs?.SetResult(true); // Unblock any awaiting CheckPauseAsync calls
+                _resumeTcs = null;
+            }
+            _isPaused = false;
             _logger.Log(JobId.ToString(), $"[REQUEST] Cancel requested for job '{Name}'.");
+        }
+
+        /// <summary>
+        /// Pauses the job if it is running.
+        /// </summary>
+        public void Pause()
+        {
+            if (Status == "Running")
+            {
+                _isPaused = true;
+                _resumeTcs = new TaskCompletionSource<bool>();
+                Status = "Paused";
+                _logger.Log(JobId.ToString(), $"[PAUSED] Job '{Name}' paused.");
+            }
+        }
+
+        /// <summary>
+        /// Resumes the job if it is paused.
+        /// </summary>
+        public void Resume()
+        {
+            if (Status == "Paused")
+            {
+                _isPaused = false;
+                _resumeTcs?.SetResult(true);
+                _resumeTcs = null;
+                Status = "Running";
+                _logger.Log(JobId.ToString(), $"[RESUMED] Job '{Name}' resumed.");
+            }
+        }
+
+        /// <summary>
+        /// Checks if the job is paused and waits until resumed or cancelled.
+        /// </summary>
+        /// <param name="ct">The cancellation token.</param>
+        /// <returns>A task that completes when the job is not paused or cancellation is requested.</returns>
+        public async Task CheckPauseAsync(CancellationToken ct)
+        {
+            while (_isPaused)
+            {
+                if (_resumeTcs == null)
+                    break;
+
+                var resumeTask = _resumeTcs.Task;
+                var cancelTask = Task.Delay(-1, ct);
+                var completedTask = await Task.WhenAny(resumeTask, cancelTask);
+
+                if (completedTask == cancelTask)
+                {
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
         }
     }
 }

@@ -29,5 +29,15 @@
         /// Cancels the job if it is running.
         /// </summary>
         void Cancel();
+
+        /// <summary>
+        /// Pauses the job if it is running.
+        /// </summary>
+        void Pause();
+
+        /// <summary>
+        /// Resumes the job if it is paused.
+        /// </summary>
+        void Resume();
     }
 }

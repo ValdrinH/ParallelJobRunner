@@ -35,6 +35,11 @@ public class JobManager : IJobManager
         _logger = logger ?? JobLoggerProvider.Instance;
     }
 
+    /// <summary>
+    /// Adds a new background job to the manager.
+    /// </summary>
+    /// <typeparam name="T">The type of the job's return value.</typeparam>
+    /// <param name="job">The background job to add.</param>
     public void AddJob<T>(BackgroundJob<T> job)
     {
         var jobWrapper = new BackgroundJobWrapper<T>(job);
@@ -53,6 +58,9 @@ public class JobManager : IJobManager
         });
     }
 
+    /// <summary>
+    /// Cancels all running jobs.
+    /// </summary>
     public void CancelAll()
     {
         lock (_lock)
@@ -62,6 +70,36 @@ public class JobManager : IJobManager
         }
     }
 
+    /// <summary>
+    /// Pauses a specific job by its ID.
+    /// </summary>
+    /// <param name="jobId">The ID of the job to pause.</param>
+    public void PauseJob(Guid jobId)
+    {
+        lock (_lock)
+        {
+            var job = _jobs.FirstOrDefault(j => j.JobId == jobId);
+            job?.Pause();
+        }
+    }
+
+    /// <summary>
+    /// Resumes a specific job by its ID.
+    /// </summary>
+    /// <param name="jobId">The ID of the job to resume.</param>
+    public void ResumeJob(Guid jobId)
+    {
+        lock (_lock)
+        {
+            var job = _jobs.FirstOrDefault(j => j.JobId == jobId);
+            job?.Resume();
+        }
+    }
+
+    /// <summary>
+    /// Retrieves all jobs along with their associated logs and results.
+    /// </summary>
+    /// <returns>An enumerable collection of job responses.</returns>
     public IEnumerable<JobResponse> GetAllJobsWithLogs()
     {
         lock (_lock)
@@ -79,6 +117,10 @@ public class JobManager : IJobManager
         }
     }
 
+    /// <summary>
+    /// Determines whether there are any running jobs.
+    /// </summary>
+    /// <returns>True if there are running jobs; otherwise, false.</returns>
     public bool HasRunningJobs()
     {
         lock (_lock)
@@ -87,6 +129,10 @@ public class JobManager : IJobManager
         }
     }
 
+    /// <summary>
+    /// Cancels all running jobs and waits for them to complete or cancel.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task CancelOrWaitForRunningJobsAsync()
     {
         lock (_lock)

@@ -27,6 +27,18 @@ namespace ParallelJobRunner.Interfaces
         void CancelAll();
 
         /// <summary>
+        /// Pauses a specific job by its ID.
+        /// </summary>
+        /// <param name="jobId">The ID of the job to pause.</param>
+        void PauseJob(Guid jobId);
+
+        /// <summary>
+        /// Resumes a specific job by its ID.
+        /// </summary>
+        /// <param name="jobId">The ID of the job to resume.</param>
+        void ResumeJob(Guid jobId);
+
+        /// <summary>
         /// Occurs when a new job is added.
         /// </summary>
         event Action<IBackgroundJobWrapper>? JobAdded;
